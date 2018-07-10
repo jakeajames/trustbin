@@ -6,6 +6,10 @@
 #include "patchfinder64.h"
 #include "amfi_utils.h"
 
+mach_port_t tfp0;
+uint64_t kernel_base;
+uint64_t kernel_slide;
+
 //Jonathan Seals: https://github.com/JonathanSeals/kernelversionhacker
 uint64_t find_kernel_base() {
 #define IMAGE_OFFSET 0x2000
@@ -23,14 +27,14 @@ uint64_t find_kernel_base() {
     while (1) {
         char *buf;
         mach_msg_type_number_t sz = 0;
-        kern_return_t ret = vm_read(taskforpidzero, addr, 0x200, (vm_offset_t*)&buf, &sz);
+        kern_return_t ret = vm_read(tfp0, addr, 0x200, (vm_offset_t*)&buf, &sz);
         
         if (ret) {
             goto next;
         }
         
         if (*((uint32_t *)buf) == MACHO_HEADER_MAGIC) {
-            int ret = vm_read(taskforpidzero, addr, 0x1000, (vm_offset_t*)&buf, &sz);
+            int ret = vm_read(tfp0, addr, 0x1000, (vm_offset_t*)&buf, &sz);
             if (ret != KERN_SUCCESS) {
                 printf("Failed vm_read %i\n", ret);
                 goto next;
@@ -38,7 +42,7 @@ uint64_t find_kernel_base() {
             
             for (uintptr_t i=addr; i < (addr+0x2000); i+=(ptrSize)) {
                 mach_msg_type_number_t sz;
-                int ret = vm_read(taskforpidzero, i, 0x120, (vm_offset_t*)&buf, &sz);
+                int ret = vm_read(tfp0, i, 0x120, (vm_offset_t*)&buf, &sz);
                 
                 if (ret != KERN_SUCCESS) {
                     printf("Failed vm_read %i\n", ret);
@@ -46,7 +50,7 @@ uint64_t find_kernel_base() {
                 }
                 if (!strcmp(buf, "__text") && !strcmp(buf+0x10, "__PRELINK_TEXT")) {
                     
-                    printf("kernel base: 0x%llx\nkaslr slide: 0x%llx\n", addr, addr - 0xfffffff007004000);
+                    printf("[*] kernel base: 0x%llx\n", addr);
                     
                     return addr;
                 }
@@ -116,13 +120,7 @@ int main(int argc, char **argv, char **envp) {
         return 0;
     }
     printf("[*] Initializing\n");
-    
-    mach_port_t tfp0;
-    uint64_t kernel_base;
-    uint64_t kernel_slide;
-    
-    kernel_base = find_kernel_base();
-    
+        
     kern_return_t ret = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
     
     if (ret != KERN_SUCCESS) {
@@ -130,7 +128,8 @@ int main(int argc, char **argv, char **envp) {
         return -1;
     }
     printf("[*] Got tfp0!\n");
-    
+
+    kernel_base = find_kernel_base();
     init_kernel_utils(tfp0);
     init_kernel(kernel_base, NULL);
     kernel_slide = kernel_base - 0xFFFFFFF007004000;
@@ -213,7 +212,7 @@ int main(int argc, char **argv, char **envp) {
         trustbin(arr);
     }
     else {
-        printf("[*] Will trust %s\n", [argv[1]);
+        printf("[*] Will trust %s\n", argv[1]);
         [arr addObject:@(argv[1])];
         trustbin(arr);
     }
