@@ -76,7 +76,7 @@ static int strtail(const char *str, const char *tail)
 
 #define MACHO(p) ((*(unsigned int *)(p) & ~1) == 0xfeedface)
 
-kern_return_t trustbin(NSMutableArray *paths[]) {
+kern_return_t trustbin(NSMutableArray *paths) {
     uint64_t trust_chain = find_trustcache();
     
     printf("[*] trust_chain at 0x%llx\n", trust_chain);
